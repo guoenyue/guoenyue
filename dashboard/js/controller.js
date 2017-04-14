@@ -5,7 +5,7 @@
 */
 
 'use strict';
-app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "ws", "storage", "random", "numberPre", "mask", function($scope, $http, $filter, $interval, ws, storage, random, numberPre, mask) {
+app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "$timeout", "ws", "storage", "random", "numberPre", "mask", function($scope, $http, $filter, $interval, $timeout, ws, storage, random, numberPre, mask) {
     var startDate = $filter("date")(new Date().getTime(), "yyyy-MM-dd");
     var baseDate = storage.getData("metadata") || {};
     //刷新时间0-59,当前设置为5分钟刷新一次
@@ -116,7 +116,7 @@ app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "ws", "
                         
                     */
                 }
-            }
+            };
             $scope.option2.xAxis.data.push("2013-02-11");
             //此处最好用这种形式给数组添加数据，因为可复用性比较强，后期可以直接通过修改后台api来实现数据添加(就是折
             //线添加)，而不用手动修改前端数据。
@@ -125,9 +125,8 @@ app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "ws", "
                 item.data.push(random.random(1, 100));
             });
         }, 1000);
-    }
+    };
     //模拟数据测试功能区
-
     $http.get("./mock/data2.json").success(function(data) {
         //将拉取的api数据存储到本地
         storage.addData("serviceData", data);
@@ -168,18 +167,7 @@ app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "ws", "
                     "data": PaidMoney
                 }]
             }
-        }
-
-
-
-
-
-
-
-
-
-
-
+        };
         /*以下是具体的操作数据的固定方法*/
         storage.addData("metadata", myDtae);
         baseDate = storage.getData("metadata");
@@ -189,7 +177,22 @@ app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "ws", "
         });
         $scope.$broadcast("changeData", [$scope.option2]);
         //refresh();
-    })
+    });
+    //使用$timeout模拟ws驱动发送数据
+    // $interval(function() {
+    //     baseDate.data.date.push("2017-03-31");
+    //     baseDate.data.cont.forEach(function(item, i, ary) {
+    //         var oldItem = item.data[item.data.length - 1];
+    //         if (item.name == "销售额") {
+    //             item.data.push(1310 + oldItem);
+    //         } else {
+    //             item.data.push(1310);
+    //         }
+    //     });
+    //     updateDate(function() {
+    //         $scope.$broadcast("changeData", [$scope.option2]);
+    //     });
+    // }, 1000);
 
     //此函数功能实现图标数值对应，图表完整，实现图表的数据更新
     function updateDate(cb) {
