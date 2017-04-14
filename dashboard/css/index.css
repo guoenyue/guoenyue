@@ -1,0 +1,24 @@
+.btn {
+    width: 80px;
+    height: 30px;
+    background-color: #111;
+    color: #fff;
+    text-align: center;
+    line-height: 30px;
+    cursor: pointer;
+}
+
+.btn~.btn {
+    margin-top: 10px;
+}
+
+.my_mask {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: rgba(203, 203, 203, .4);
+    z-index: 99;
+    display: none;
+}

@@ -1,0 +1,17 @@
+{
+  "name": "guo",
+  "version": "1.0.0",
+  "description": "ngjs",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "angularjs-toaster": "^2.1.0"
+  },
+  "dependencies": {
+    "angular-ui-router": "^0.4.2"
+  }
+}

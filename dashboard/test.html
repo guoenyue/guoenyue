@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+
+<body>
+    <button id="btn">按钮</button>
+    <input type="text" id="txt">
+    <script>
+        "use strict";
+        //输入框实现实施输入类型限定
+        //配合按钮同时实现
+        var btn = document.getElementById("btn");
+        var oTxt = document.getElementById("txt");
+        btn.onclick = function() {
+            //判断元数据，若为数字则加一；反之变成1；
+            oTxt.value = isNaN(oTxt.value) ? 1 : ++oTxt.value;
+        }
+        oTxt.oninput = function(e) {
+            e = e || window.event;
+            var oTar = e.srcElement || e.target;
+            console.log(oTar.value);
+            //此处的value获取到的是新键入的值
+            //取到输入框的值若为非数字则将其置成空;若为满足条件的值(此处为数字)则不进行特殊处理
+            oTar.value = isNaN(parseInt(oTar.value)) ? '' : parseInt(oTar.value);
+            //有个bug，这个玩意不能识别小数点，也就是只能操作整数，不能操作浮点型数字。伤，除非手动
+            //在输入数子之后，再将小数点填入适当的位置，让其总是以数字的形式存在
+        }
+    </script>
+</body>
+
+</html>
