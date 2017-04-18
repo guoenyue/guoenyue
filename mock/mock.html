@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+
+<body>
+    <script>
+        var baseNum = 5;
+        var ajax = new XMLHttpRequest();
+        ajax.open("GET", "./data2.json", true);
+        ajax.send();
+        ajax.onreadystatechange = function(re, status, xhr) {
+            if (ajax.readyState == 4 && ajax.status == 200) {
+                var metaData = JSON.parse(ajax.responseText).data;
+                var tmpObj = {};
+                var tmpArr = [];
+                metaData.forEach(function(item, i) {
+                    var spliceNum = Math.floor((item.minute % baseNum) / 10) + Math.floor(item.minute / baseNum) * baseNum;
+                    var tmpStr = "time" + item.year + '' + item.month + '' + item.day + '' + item.hour + spliceNum;
+                    tmpObj[tmpStr] = tmpObj[tmpStr] ? tmpObj[tmpStr] : [];
+                    tmpObj[tmpStr].push(item);
+                });
+                console.log(tmpObj);
+                //为了慎重，这个遍历应该在变成数组之后从新排序，因为这个for in的遍历循环输出顺序根据浏览器不同可能排序不同
+                //资料url：http://echizen.github.io/tech/2017/03-12-js-object-forin-order
+                for (var i in tmpObj) {
+                    tmpArr.push({
+                        time: i.substr(4),
+                        data: tmpObj[i]
+                    });
+                }
+                console.log(tmpArr);
+            }
+        }
+    </script>
+</body>
+
+</html>
