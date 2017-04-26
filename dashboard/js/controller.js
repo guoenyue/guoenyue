@@ -5,11 +5,17 @@
 */
 
 'use strict';
-app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "$timeout", "ws", "storage", "random", "numberPre", "mask", function($scope, $http, $filter, $interval, $timeout, ws, storage, random, numberPre, mask) {
-    var startDate = $filter("date")(new Date().getTime(), "yyyy-MM-dd");
+app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "$timeout", "ws", "storage", "random", "numberPre", "mask", "load", "operateData", function($scope, $http, $filter, $interval, $timeout, ws, storage, random, numberPre, mask, load, operateData) {
+    var baseNum = 5;
+    var theDate = new Date();
+    var initInterval = null; //监察定时器--此定时器只监察当日数据
+    var selecteDate = "day" + theDate.getFullYear() + numberPre.fillZero(theDate.getMonth() + 1) + numberPre.fillZero(theDate.getDate());
+    var timeArr = [];
+    var moneyArr = [];
+    var totalArr = [];
+    var actObj = null; //当前查看的日期的数据数组（不一定是当天）
+    $scope.option2 = null;
     var baseDate = storage.getData("metadata") || {};
-    //刷新时间0-59,当前设置为5分钟刷新一次
-    var REFRESH_MIN = 5;
     //基础表单数据（各种初始化系统参数设置）,尚未填入数据
     var baseSheet = {
         title: {
@@ -26,12 +32,6 @@ app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "$timeo
             orient: "vertical",
             data: []
         },
-        // dataZoom: [{
-        //     start: 90
-        //         //startValue: $filter("date")(new Date().getTime(), "yyyy-MM-dd")
-        // }, {
-        //     type: 'inside'
-        // }],
         toolbox: {
             left: 'right',
             feature: {
@@ -42,305 +42,323 @@ app.controller("commonCtrl", ["$scope", "$http", "$filter", "$interval", "$timeo
                 saveAsImage: {}
             }
         },
-        xAxis: {
+        xAxis: [{
+            type: 'category',
+            name: '时间',
+            // offset: "-10",
+            // position: "bottom",
+            //boundaryGap: ["20%", "20%"],
+            axisLine: {
+                lineStyle: {
+                    color: '#ccc'
+                }
+            },
+            nameLocation: "start",
+            nameTextStyle: {
+                color: '#333'
+            },
+            axisLabel: {
+                textStyle: {
+                    color: '#333'
+                },
+                //interval: 0,
+                // formatter: function(value) {
+                //     var [h, m] = value.split(":");
+                //     m = baseNum + parseInt(m);
+                //     if (m == 60) {
+                //         h = 1 + parseInt(h);
+                //         m = "00";
+                //     }
+                //     return numberPre.fillZero(h) + ":" + numberPre.fillZero(m);
+                // }
+            },
+            axisTick: {
+                show: false
+            },
             data: []
-        },
+        }],
         yAxis: [{
+            type: 'value',
+            name: '销售额',
+            min: 0,
+            max: 100000,
+            axisLabel: {
+                formatter: '{value} $'
+            }
+        }, {
+            type: 'value',
+            name: '交易额',
+            min: 0,
+            max: 800,
+            position: "right",
             axisLabel: {
                 formatter: '{value} $'
             }
         }],
-        series: []
-    };
-
-    $scope.option2 = null;
-    //在ws中实施的将数据保存起来，存到localStorage上
-    //初步想存两组数据，一组是元数据不变，另一组是格式化后的数据存储
-    //元数据是否每次打开页面都要实时刷新？初步计划设定每2小时刷新一遍元数据
-
-    // ws.socket.onopen = function(event) {
-    //     console.log(event)
-    //     console.log("ws链接开启成功");
-    //     // 发送一个初始化消息
-    //     ws.socket.send('I am the client and I\'m listening!');
-    //     // 监听消息
-    //     ws.socket.onmessage = function(event) {
-    //         console.log("message");
-    //         console.log('Client received a message', event);
-    //         console.log(JSON.parse(event.data));
-    //     };
-    //     // 监听Socket的关闭
-    //     ws.socket.onclose = function(event) {
-    //         console.log("close");
-    //         console.log('Client notified socket has closed', event);
-    //     };
-    //     // 关闭Socket.... 
-    //     //setTimeout(ws.socket.close())
-    // };
-
-    //此处的消息发射应该是每5分钟发射一次，即将数据变动每隔5分钟刷新一次
-    //所以应当使用$interval服务，在此服务的函数中，每次都要将localstorage存取的数据从新赋值给option,格
-    //式化完数据之后将事件广播给指令(即图表控件)调用setOption方法刷新视图
-    $scope.trans = function(num) {
-        $scope.option2.series[0].data[1] = num;
-        $scope.$broadcast("changeData", [$scope.option2]);
-    }
-
-    function refresh() {
-        //定时器更新模块
-        $interval(function() {
-            $scope.myDate = new Date().getTime();
-            $scope.sec = numberPre.fillZero((new Date()).getSeconds());
-            if ($scope.sec % 60 == 0) {
-                $scope.min = numberPre.fillZero((new Date()).getMinutes());
-                if ($scope.min % REFRESH_MIN == 0) {
-                    //每达到整5分钟时更新一次信息
-                    $scope.$broadcast("changeData", $scope.option2);
-                    $scope.hour = numberPre.fillZero((new Date()).getHours());
-                    //后边数据太多的话有可能限制条数，限制方法对数据数组进行截取，保留最新的若干条即可
-                    //截取数组后一半数据或者后n条数据，这个功能可能几个小时启动一次
-
-                    /*
-                        1.截取一半
-                        var len = parseInt((arr.length-1)/2);
-                        arr.splice(0,len);
-                        2.截取后留下n条最新
-                        var len = arr.length-n;
-                        arr.splice(0,len);
-                    */
-
-
-
-                    /*
-                        时间间隔的计算
-                        
-                    */
+        series: [{
+            name: '销售额',
+            type: 'line',
+            smooth: true,
+            symbolSize: 10,
+            animation: false,
+            lineWidth: 1.2,
+            hoverAnimation: false,
+            symbol: 'circle',
+            lineStyle: {
+                normal: {
+                    width: 1
                 }
-            };
-            $scope.option2.xAxis.data.push("2013-02-11");
-            //此处最好用这种形式给数组添加数据，因为可复用性比较强，后期可以直接通过修改后台api来实现数据添加(就是折
-            //线添加)，而不用手动修改前端数据。
-            $scope.option2.series.forEach(function(item, i) {
-                //在此处操作数据的变化-一般更新为添加，图标应该是一个上升曲线
-                item.data.push(random.random(1, 100));
-            });
-        }, 1000);
+            },
+            itemStyle: {
+                normal: {
+                    opacity: 0.6
+                }
+            },
+            data: []
+        }, {
+            name: '交易额',
+            type: 'bar',
+            boundaryGap: ['20%', '20%'],
+            barCategoryGap: 1,
+            yAxisIndex: 1,
+            barWidth: 5,
+            // barGap: 1,
+            itemStyle: {
+                normal: {
+                    opacity: .6
+                }
+            },
+            markPoint: {
+                data: [{
+                    name: '最高交易额',
+                    type: 'max',
+                    valueIndex: 1
+                }]
+            },
+            data: []
+        }]
     };
+
+    ws.socket.onopen = function(event) {
+        console.log(event)
+        console.log("ws链接开启成功");
+        // 发送一个初始化消息
+        ws.socket.send('I am the client and I\'m listening!');
+        // 监听消息
+        ws.socket.onmessage = function(event) {
+            console.log('Client received a message', event);
+            var data = JSON.parse(event.data);
+            updateDate(data);
+        };
+        // 监听Socket的关闭
+        ws.socket.onclose = function(event) {
+            console.log("close");
+            console.log('Client notified socket has closed', event);
+            alert("sever端关闭websocket服务器，数据无法更新，请刷新后在查看实时数据。");
+        };
+        // 关闭Socket.... 
+        //setTimeout(ws.socket.close())
+    };
+
+    // $interval(function() {
+    //     updateDate({
+    //         "orderID": "xxx",
+    //         "createtime": "2017-01-22 8:02:22",
+    //         "OrderStatus": 1,
+    //         "PaidMoney": 20,
+    //         "Year": 2017,
+    //         "Month": 4,
+    //         "Day": 26,
+    //         "Hour": random.random(0, 10),
+    //         "Minute": 2,
+    //         "Second": 22
+    //     });
+    // }, 10000);
+
     //模拟数据测试功能区
-    $http.get("./mock/data2.json").success(function(data) {
-        //将拉取的api数据存储到本地
+    //console.log(moment().subtract(6, "days").format("YYYY-MM-DD HH:mm:ss"));
+
+    var startTime = moment().subtract(6, "days").format("YYYY-MM-DD 00:00:00");
+    var endTime = moment().format("YYYY-MM-DD HH:mm:ss");
+    var postDate = JSON.stringify({ startTime: startTime, endTime: endTime });
+
+    //拉取所有数据作为元数据
+    $http.post("http://192.168.4.54:8007/api/Init", postDate).success(function(data) {
+        //存取元数据
         storage.addData("serviceData", data);
-        //数据缓存
+        var tmpdata = storage.getData("serviceData");
+        if (tmpdata.length == 0) {
+            alert("当前暂无数据");
+            return;
+        }
+        initData(5);
+    });
+
+    //表单数据初始化
+    function initData(_baseNum) {
+        _baseNum = _baseNum ? _baseNum : baseNum;
         var tmpDate = storage.getData("serviceData");
-        //对数据格式化，将坐标轴的纵轴，即时间数组填充
-        var xAris = tmpDate.data.map(function(item, i) { return item.createtime; });
-        //该步是进行数据汇总计算
-        tmpDate.data.reduce(function(prev, item, i) {
-            //count实现上一个对象的值与当前对象的值的计算，计算结果存到当前对象中，实现了累加
-            //注意第一项不会进行计算，在后边获取第一项的值的时候，注意判断将第一项的值默认设置为他的自身
-            var count = prev["PaidMoney"] + item["PaidMoney"];
-            item["count"] = count;
-            //此处是个坑，reduce这个函数要有一个返回值作为下一次循环的第一个参数，此处根据上边对应，返回
-            //一个带有属性值为paidmoney的对象即可。
-            return { "PaidMoney": count };
+        tmpDate = JSON.parse(tmpDate);
+        var obj = null;
+        tmpDate.forEach(function(item, i) {
+            obj = operateData.sort(item, _baseNum);
         });
-        //存储坐标轴的具体数值，将数值数组取出来，里边填了上边reduce函数的坑
-        var cont = tmpDate.data.map(function(item, i) {
-            return (i == 0) ? item.PaidMoney : item.count;
+        storage.addData("processedData", obj);
+        getSelectedDateArr();
+        buildSheet(function() {
+            $interval.cancel(initInterval);
+            initInterval = $interval(listenDate, 100);
         });
-        var PaidMoney = tmpDate.data.map(function(item, i) {
-            return item.PaidMoney;
+    };
+    //设置当前查看时间的数据
+    function getSelectedDateArr() {
+        var obj = storage.getData("processedData");
+        var thisDayArr = obj["baseNum" + baseNum + selecteDate];
+        if (thisDayArr == undefined) {
+            alert("暂无查询日信息");
+            thisDayArr = operateData.dayArr.map(function(item, i) { item.money = 0; return item; });
+        };
+        actObj = sessionStorage["baseNum" + baseNum + selecteDate] ? JSON.parse(sessionStorage["baseNum" + baseNum + selecteDate]) : operateData.getTotal(thisDayArr, "money", "total");
+        sessionStorage["baseNum" + baseNum + selecteDate] = JSON.stringify(actObj);
+        return actObj;
+    }
+    //建立图表
+    function buildSheet(cb) {
+        var thisDayArr = actObj;
+        timeArr = [];
+        moneyArr = [];
+        totalArr = [];
+        var nowTime = new Date();
+        var now = {
+            Year: nowTime.getFullYear(),
+            Month: nowTime.getMonth() + 1,
+            Day: nowTime.getDate(),
+            Hour: nowTime.getHours(),
+            Minute: nowTime.getMinutes()
+        }
+        var endIndex = getIndex(now, baseNum);
+        var thisDay = "day" + now.Year + numberPre.fillZero(now.Month) + numberPre.fillZero(now.Day);
+        thisDayArr.forEach(function(item, i) {
+            timeArr.push(item.time);
+            if (selecteDate == thisDay) {
+                if (i < endIndex) {
+                    moneyArr.push(item.money);
+                    totalArr.push(parseFloat(item.total).toFixed(2));
+                };
+            } else {
+                moneyArr.push(item.money);
+                totalArr.push(parseFloat(item.total).toFixed(2));
+            }
         });
 
-        // 自定义的本地api格式
-        var myDtae = {
+        var myData = {
             "title": "销售实时数据分析表",
             "token": "fhsfshshfawkdkakn2e3e2",
             "lastLogin": "2017-04-13",
             "data": {
-                "date": xAris,
+                "date": '',
                 "cont": [{
                     "name": "销售额",
-                    "data": cont
+                    "data": totalArr
                 }, {
                     "name": "交易额",
-                    "data": PaidMoney
+                    "data": moneyArr
                 }]
             }
         };
-        /*以下是具体的操作数据的固定方法*/
-        storage.addData("metadata", myDtae);
-        baseDate = storage.getData("metadata");
-        $scope.option2 = baseSheet;
-        updateDate(function() {
-            $scope.$broadcast("chartInit", [$scope.option2]);
-        });
-        $scope.$broadcast("changeData", [$scope.option2]);
-        //refresh();
-    });
-    //使用$timeout模拟ws驱动发送数据
-    // $interval(function() {
-    //     baseDate.data.date.push("2017-03-31");
-    //     baseDate.data.cont.forEach(function(item, i, ary) {
-    //         var oldItem = item.data[item.data.length - 1];
-    //         if (item.name == "销售额") {
-    //             item.data.push(1310 + oldItem);
-    //         } else {
-    //             item.data.push(1310);
-    //         }
-    //     });
-    //     updateDate(function() {
-    //         $scope.$broadcast("changeData", [$scope.option2]);
-    //     });
-    // }, 1000);
+        baseSheet.xAxis[0].data = timeArr;
 
-    //此函数功能实现图标数值对应，图表完整，实现图表的数据更新
-    function updateDate(cb) {
-        //此处的baseDate是存储的本地格式化后的值，所以图表的更改应该是去操作这个baseDate的值，实现数表的改变(即增加显示项)
-        $scope.option2.xAxis.data = baseDate.data.date.map(function(item, i) {
-            // return '2017-' + numberPre.fillZero(random.random(1, 12)) + "-" + numberPre.fillZero(random.random(1, 28));
-            return item;
+        baseSheet.series.forEach(function(item, i) {
+            item.data = myData.data.cont[i].data;
         });
-        $scope.option2.legend.data = baseDate.data.cont.map(function(item, i) {
+
+        $scope.option2 = baseSheet;
+        $scope.option2.legend.data = myData.data.cont.map(function(item, i) {
             return item.name;
         });
-        $scope.option2.series = baseDate.data.cont.map(function(item, i) {
-            return {
-                name: item.name,
-                type: "line",
-                smooth: true,
-                data: item.data.map(function(key, index) {
-                    //return random.random(1, 100);
-                    return key;
-                })
-            };
-        });
-        if (cb != undefined) {
+        $scope.$broadcast("chartInit", [$scope.option2]);
+        if (cb != undefined && typeof cb == "function") {
             cb();
         }
-    }
-    /*------------------------*/
-    console.log(mask.dom);
-    // var tmpDom = document.createElement("div");
-    // tmpDom.style = "height:200px;width:200px;background-color:red;";
-    // mask.addHTML(tmpDom);
-    // mask.clearDom();
-    // //mask.hide();
-    // mask.mask.onclick = function() {
-    //     mask.hide();
-    // }
-
-}]);
-app.controller("commonCtrl2", ["$scope", "ws", function($scope, ws, storage) {
-    $scope.option2 = {
-        title: {
-            text: " ECharts 入门示例 "
-        },
-        calculable: true,
-        tooltip: {},
-        legend: {
-            data: ["销量"]
-        },
-        dataZoom: [{
-            startValue: "10"
-        }, {
-            type: 'inside'
-        }],
-        xAxis: {
-            data: [15, 10, 26, 30, 10, 80]
-        },
-        yAxis: {},
-        series: [{
-            name: "销量",
-            type: "bar",
-            data: [15, 10, 26, 30, 10, 80]
-        }],
-        dataRange: {}
-    };
-    $scope.trans = function(num) {
-        $scope.option2.series[0].data[1] = num;
         $scope.$broadcast("changeData", [$scope.option2]);
-    }
-
-}]);
-
-
-app.controller("loginCtrl", ["$scope", "$http", function($scope, $http) {
-    $scope.loginSubmit = function() {
-        $scope.submitted = true;
-        var errArr = [];
-        for (var i in $scope.loginForm.$error) {
-            errArr.push(i);
-        };
-        if (errArr.length) {
-            return false;
-        } else {
-            alert("提交了");
-            // $http.post({ url: "post.php", dataType: "json" }).success(function(re, status, xhr) {
-            //     console.log(re);
-            // }).error(function(err) {
-            //     console.log(err);
-            // })
-        }
-    }
-}]);
-
-
-app.controller("testRanCtrl", ["$scope", "random", "$interval", function($scope, random, $interval) {
-    $scope.random = random.random(1, 9);
-}]);
-
-
-//使用了toaster模块，api地址：https://github.com/jirikavi/AngularJS-Toaster
-
-app.controller('myController', function($scope, toaster) {
-    $scope.pop = function() {
-        toaster.pop({
-            title: 'A toast',
-            body: 'with an onHide callback',
-            onHideCallback: function() {
-                toaster.pop({
-                    title: 'A toast',
-                    body: 'invoked as an onHide callback'
-                });
-            }
-        });
-        toaster.pop({
-            title: 'A toast',
-            body: 'with an onHide callback'
-        });
     };
-});
-
-//测试时间控制器
-app.controller("dateCtrl", ["$scope", "$interval", "$filter", "date", "numberPre", function($scope, $interval, $filter, date, numberPre) {
-    $scope.year = date.year;
-    $scope.month = date.month;
-    $scope.day = date.date;
-    $scope.date = date.day;
-    $scope.hour = numberPre.fillZero(date.hour);
-    $scope.min = numberPre.fillZero(date.min);
-    $scope.sec = numberPre.fillZero(date.sec);
-    $scope.myDate = new Date().getTime();
-    $interval(function() {
-        $scope.myDate = new Date().getTime();
-        $scope.sec = numberPre.fillZero((new Date()).getSeconds());
-        if ($scope.sec % 60 == 0) {
-            $scope.min = numberPre.fillZero((new Date()).getMinutes());
-            if ($scope.min % 60 == 0) {
-                $scope.hour = numberPre.fillZero((new Date()).getHours());
+    //获取推送条目的所在数组的索引值
+    function getIndex(item, _baseNum) {
+        _baseNum = _baseNum ? _baseNum : baseNum;
+        var minRange = Math.floor((item.Minute % _baseNum) / 10) + Math.floor(item.Minute / _baseNum);
+        var sortIndex = item.Hour * (60 / _baseNum) + minRange;
+        return sortIndex;
+    };
+    //数据变化图表更新
+    function updateDate(_data, cb) {
+        var dataNow = { "orderID": "0000000", "createtime": new Date().getTime(), "OrderStatus": 1, "PaidMoney": 0, "Year": new Date().getFullYear(), "Month": new Date().getMonth() + 1, "Day": new Date().getDate(), "Hour": new Date().getHours(), "Minute": new Date().getMinutes(), "Second": new Date().getSeconds() };
+        var itemNew = _data || dataNow;
+        //非查看日消息不添加
+        if (selecteDate != "day" + itemNew.Year + numberPre.fillZero(itemNew.Month) + numberPre.fillZero(itemNew.Day)) return void(0);
+        var nowIdx = getIndex(dataNow, baseNum);
+        var idx = getIndex(itemNew, baseNum);
+        moneyArr[idx] = (isNaN(parseFloat(moneyArr[idx]))) ? itemNew.PaidMoney.toFixed(2) : (parseFloat(moneyArr[idx]) + itemNew.PaidMoney).toFixed(2);
+        totalArr[idx] = (isNaN(parseFloat(totalArr[idx])) ? (parseFloat(totalArr[idx - 1] + itemNew.PaidMoney).toFixed(2)) : (parseFloat(totalArr[idx]) + itemNew.PaidMoney).toFixed(2));
+        if (_data != undefined && dataNow.Year == _data.Year && dataNow.Month == _data.Month && dataNow.Day == _data.Day) {
+            if (idx < nowIdx) {
+                for (var fillGo = idx + 1; fillGo < nowIdx; fillGo++) {
+                    totalArr[fillGo] = parseFloat(parseFloat(totalArr[fillGo]) + itemNew.PaidMoney).toFixed(2);
+                }
             }
         }
-    }, 1000);
-    $scope.num = $filter('currency')(123534, "RMB￥");
+        $scope.$broadcast("changeData", [$scope.option2]);
+        if (cb != undefined && typeof cb == "function") {
+            cb();
+        }
+    };
+
+    //监听器，此函数功能旨在监听到目前时刻是否有数据变化，若有新数据添加则跳过，若无，则将虚拟数值0填入数组中，以达到实时显示当前信息的目的
+    function listenDate() {
+        var nowTime = new Date();
+        var now = {
+            Hour: nowTime.getHours(),
+            Minute: nowTime.getMinutes()
+        };
+        var nowIndex = getIndex(now, baseNum) - 1;
+        if (moneyArr[nowIndex] == undefined) {
+            moneyArr[nowIndex] = 0;
+            totalArr[nowIndex] = nowIndex == 0 ? moneyArr[nowIndex] : totalArr[nowIndex - 1];
+            $scope.$broadcast("changeData", [$scope.option2]);
+        }
+        console.log("监察中...");
+    };
+
+
+    function checkNaN(index) {
+
+    }
+
+    $scope.dateArr = Array.apply(null, { length: 7 }).map(function(item, i) { return moment().subtract(6 - i, "days").format("YYYYMMDD"); });
+
+    $scope.changeDay = getDate;
+
+
+    function getDate(_date) {
+        selecteDate = "day" + _date;
+        getSelectedDateArr();
+        if (_date == moment().format("YYYYMMDD")) {
+            // buildSheet(function() {
+            //     $interval.cancel(initInterval);
+            //     initInterval = $interval(listenDate, 100);
+            // });
+            window.location.reload();
+        } else {
+            buildSheet(function() {
+                sessionStorage.removeItem("baseNum" + baseNum + selecteDate);
+                $interval.cancel(initInterval);
+            });
+        }
+
+    };
 }]);
 
 
-app.controller("textCtrl", ["$scope", function($scope) {
-    $scope.message = { "item": 0, "cont": "我是新消息" };
-}])
-
-//ui-router控制器
-app.controller("routerCtrl", ["$scope", function($scope) {
-
-}]);
+/*
+图标的设计规格，固定坐标轴y轴暂时定为最大坐标100,000.
+尺寸：每个柱状图的柱子大概需要宽5像素，柱子间间隔1像素，共288个横坐标轴，即总共需要至少1728个像素+左右留距
+*/

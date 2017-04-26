@@ -1,1 +1,1 @@
-var app = angular.module("myApp", ["ngMessages", "toaster", "ngAnimate", "ui.router"]);
+var app = angular.module("myApp", []);

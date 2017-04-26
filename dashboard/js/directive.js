@@ -7,20 +7,20 @@ app.directive("eCharts", function() {
             var theme, chart;
 
             function chartsInit() {
-                console.log("初始化图表");
+                //  console.log("初始化图表");
                 theme = (scope.config && scope.config.theme) ?
                     scope.config.theme : 'default';
                 chart = echarts.init(element[0], theme);
                 chart.showLoading();
                 //视图变化更新
                 window.onresize = function() {
-                    console.log("视图容器大小变化");
+                    //    console.log("视图容器大小变化");
                     chart.resize();
                 };
             }
 
             function refreshChart() {
-                console.log("图表填入数据并显示");
+                // console.log("图表填入数据并显示");
                 // if (scope.config && scope.config.dataLoaded === false) {
                 //     chart.showLoading();
                 // }
